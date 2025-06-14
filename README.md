@@ -49,4 +49,18 @@
 <br>
 <br>
 Simply ```docker compose up -d```
+<br>
+
+
+Some sample curl commands to use the system
+<br>
+```curl -X POST -H "Content-Type: application/json" -d '{"id": 200, "name": "Laptop Stand"}'```
+<br>
+```curl -X GET "http://localhost:5000/items/?item_id=201" ; echo```
+<br>
+```curl -X GET "http://localhost:5000/items/?name=mouse" ; echo```
+<br>
+```curl -X PUT -H "Content-Type: application/json" -d '{"name": "Vertical Mouse"}' "http://localhost:5000/items/202" ; echo```
+<br>
+```curl -X DELETE "http://localhost:5000/items/200" ; echo```
 
