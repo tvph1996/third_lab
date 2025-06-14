@@ -41,5 +41,12 @@
 
 *MongoDB*
 - Data is stored locally using Docker Volume
+<br>
+<br>
+<br>
 
+**How To Run**
+<br>
+<br>
+Simply ```docker compose up -d```
 
