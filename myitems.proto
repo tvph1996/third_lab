@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package myitems;
+
+message Item {
+  int32 id = 1;
+  string name = 2;
+}
+
+message AddItemResponse {
+  bool result = 1;
+  Item added_item = 2;
+}
+
+message GetItemResponse {
+  bool result = 1;
+  Item requested_item = 2;
+}
+
+message UpdateItemResponse {
+  bool result = 1;
+  Item old_item = 2;
+  Item new_item = 3;
+}
+
+message DeleteItemResponse {
+  bool result = 1;
+  Item deleted_item = 2;
+}
+
+service ItemService {
+
+  rpc AddItem(Item) returns (AddItemResponse);
+
+  rpc GetItem(Item) returns (stream GetItemResponse);
+
+  rpc UpdateItem(Item) returns (UpdateItemResponse);
+
+  rpc DeleteItem(Item) returns (DeleteItemResponse);
+
+}
