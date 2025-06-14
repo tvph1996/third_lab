@@ -9,6 +9,10 @@ from pybreaker import CircuitBreaker, CircuitBreakerError
 import asyncio
 from collections import deque
 import json
+import warnings
+
+
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
