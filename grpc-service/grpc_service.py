@@ -6,7 +6,6 @@ import re
 from pymongo import MongoClient, errors
 import myitems_pb2
 import myitems_pb2_grpc
-
 from collections import OrderedDict
 
 
@@ -36,6 +35,7 @@ try:
 
 
 except Exception as e:
+    
     logging.error(f"Could not connect to MongoDB: {e}")
     exit(1)
 
@@ -46,11 +46,9 @@ except Exception as e:
 class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
 
 
-
-    def AddItem(self, request, context):
+    def AddItem(self, request, context):   
         
         logging.info(f"Request to add item: id={request.id}, name='{request.name}'")
-
 
         try:
 
@@ -70,14 +68,13 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
             
             return myitems_pb2.AddItemResponse(result=True, added_item=request)
 
-
+ 
         except errors.ConnectionFailure as e:
             
             logging.error(f"MongoDB connection error in AddItem: {e}")
             context.set_details("MongoDB is currently unavailable.")
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             return myitems_pb2.AddItemResponse(result=False)
-
 
 
 
@@ -99,7 +96,7 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
                 if search_regex.search(item.name):
                     cache_hits.append(item)
         
-        # Found item in cache
+        # Found item in cache -> return from Cache
         if cache_hits:
             logging.info(f"Found {len(cache_hits)} item(s) in cache.")
             for item in cache_hits:
@@ -108,26 +105,37 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
 
         # --- Search in MongoDB when no result in Cache  ---
         logging.info("No item in Cache, continue to MongoDB.")
-        
+
+        query = {}
+
+        if request.id > 0:
+            query = {"id": request.id}
+        elif request.name:
+            query = {"name": re.compile(re.escape(request.name), re.IGNORECASE)}
+        else:
+            logging.warning("GetItem request received without a valid ID or name.")
+            context.set_details("Provide a valid item ID (greater than 0) or a name to search.")
+            context.set_code(grpc.StatusCode.INVALID_ARGUMENT)
+            yield myitems_pb2.GetItemResponse(result=False)
+            return
+
         try:
-            if request.id > 0:
-                query = {"id": request.id}
-            elif request.name:
-                query = {"name": re.compile(re.escape(request.name), re.IGNORECASE)}
 
             found_items = items_collection.find(query)
             db_has_results = False
+
             for doc in found_items:
+                
                 db_has_results = True
                 item_proto = myitems_pb2.Item(id=doc["id"], name=doc["name"])
-                
+
                 # Update cache with new data from DB
                 if len(item_cache) >= CACHE_MAX_SIZE:
                     item_cache.popitem(last=False)
                 item_cache[item_proto.id] = item_proto
-                
+
                 yield myitems_pb2.GetItemResponse(result=True, requested_item=item_proto)
-            
+
             if not db_has_results:
                 context.set_details("No items found in database.")
                 context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -135,8 +143,9 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
 
 
         except errors.ConnectionFailure as e:
-
+            
             logging.error(f"MongoDB error in GetItem: {e}")
+            
             context.set_details("MongoDB is unavailable and item not in cache.")
             context.set_code(grpc.StatusCode.UNAVAILABLE)
             yield myitems_pb2.GetItemResponse(result=False)
@@ -150,19 +159,23 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
         old_doc = items_collection.find_one({"id": request.id})
         
         if not old_doc:
+
             logging.info(f"Item with id {request.id} not found.")
             context.set_details(f"Item with id {request.id} not found.")
             context.set_code(grpc.StatusCode.NOT_FOUND)
             return myitems_pb2.UpdateItemResponse(result=False)
 
         if old_doc["name"] != request.name and items_collection.find_one({"name": request.name}):
+
             logging.info(f"Item name '{request.name}' is already in use.")
             context.set_details(f"Item name '{request.name}' is already in use.")
             context.set_code(grpc.StatusCode.ALREADY_EXISTS)
             return myitems_pb2.UpdateItemResponse(result=False)
 
         items_collection.update_one({"id": request.id}, {"$set": {"name": request.name}})
+
         logging.info(f"Updated item id={request.id}.")
+
         return myitems_pb2.UpdateItemResponse(
             result=True,
             old_item=myitems_pb2.Item(id=old_doc["id"], name=old_doc["name"]),
@@ -177,10 +190,14 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
         deleted_doc = items_collection.find_one_and_delete({"id": request.id})
 
         if deleted_doc:
+
             logging.info(f"Deleted item id={deleted_doc['id']}.")
             deleted_item = myitems_pb2.Item(id=deleted_doc["id"], name=deleted_doc["name"])
             return myitems_pb2.DeleteItemResponse(result=True, deleted_item=deleted_item)
+
+
         else:
+
             logging.info(f"Item with id {request.id} not found.")
             context.set_details(f"Item with id {request.id} not found.")
             context.set_code(grpc.StatusCode.NOT_FOUND)
@@ -199,7 +216,6 @@ def serve():
     server.start()
     logging.info(f"gRPC server listening on port {port}.")
     server.wait_for_termination()
-
 
 
 
