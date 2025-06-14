@@ -62,6 +62,12 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
                 
             items_collection.insert_one({"id": request.id, "name": request.name})
             logging.info(f"Added item id={request.id}, name='{request.name}'.")
+            
+            if len(item_cache) >= CACHE_MAX_SIZE:
+                item_cache.popitem(last=False)
+            
+            item_cache[request.id] = request
+            
             return myitems_pb2.AddItemResponse(result=True, added_item=request)
 
 
@@ -76,43 +82,65 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
 
 
     def GetItem(self, request, context):
+        
+        # --- Search in Cache first ---
+        cache_hits = []
+        
+        # Search by ID
+        if request.id > 0 and request.id in item_cache:
+            logging.info(f"Cache hit for item id: {request.id}")
+            cache_hits.append(item_cache[request.id])
+        
+        # Search cache by name
+        elif request.name:
+            logging.info(f"Searching cache for name like: '{request.name}'")
+            search_regex = re.compile(re.escape(request.name), re.IGNORECASE)
+            for item in item_cache.values():
+                if search_regex.search(item.name):
+                    cache_hits.append(item)
+        
+        # Found item in cache
+        if cache_hits:
+            logging.info(f"Found {len(cache_hits)} item(s) in cache.")
+            for item in cache_hits:
+                yield myitems_pb2.GetItemResponse(result=True, requested_item=item)
+            return
 
+        # --- Search in MongoDB when no result in Cache  ---
+        logging.info("No item in Cache, continue to MongoDB.")
+        
         try:
-
             if request.id > 0:
                 query = {"id": request.id}
-                logging.info(f"Searching for item with id: {request.id}")
-
             elif request.name:
-                # Case-insensitive regex to find all items containing the string.
                 query = {"name": re.compile(re.escape(request.name), re.IGNORECASE)}
-                logging.info(f"Searching for item with name like: '{request.name}'")
 
             found_items = items_collection.find(query)
-            has_results = False
-            
+            db_has_results = False
             for doc in found_items:
-                has_results = True
-                logging.info(f"Retrieved item with id: {doc["id"]}, name: {doc["name"]}")
-                yield myitems_pb2.GetItemResponse(
-                    result=True,
-                    requested_item=myitems_pb2.Item(id=doc["id"], name=doc["name"])
-                )
-        
-            if not has_results:
-                logging.info("No item found.")
-                context.set_details("No item found.")
+                db_has_results = True
+                item_proto = myitems_pb2.Item(id=doc["id"], name=doc["name"])
+                
+                # Update cache with new data from DB
+                if len(item_cache) >= CACHE_MAX_SIZE:
+                    item_cache.popitem(last=False)
+                item_cache[item_proto.id] = item_proto
+                
+                yield myitems_pb2.GetItemResponse(result=True, requested_item=item_proto)
+            
+            if not db_has_results:
+                context.set_details("No items found in database.")
                 context.set_code(grpc.StatusCode.NOT_FOUND)
                 yield myitems_pb2.GetItemResponse(result=False)
 
 
         except errors.ConnectionFailure as e:
-            
-            logging.error(f"MongoDB connection error in GetItem: {e}")
-            context.set_details("MongoDB is currently unavailable.")
-            context.set_code(grpc.StatusCode.UNAVAILABLE)
-            return myitems_pb2.GetItemResponse(result=False)
 
+            logging.error(f"MongoDB error in GetItem: {e}")
+            context.set_details("MongoDB is unavailable and item not in cache.")
+            context.set_code(grpc.StatusCode.UNAVAILABLE)
+            yield myitems_pb2.GetItemResponse(result=False)
+            return
 
 
 
@@ -140,6 +168,8 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
             old_item=myitems_pb2.Item(id=old_doc["id"], name=old_doc["name"]),
             new_item=request
         )
+
+
 
     def DeleteItem(self, request, context):
 
