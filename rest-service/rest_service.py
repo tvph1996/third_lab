@@ -142,12 +142,15 @@ async def add_item(request: Request):
             
 
             except grpc.RpcError as e:
+                
+                logging.warning(f"Call {attempt + 1} failed: {e.details()}")
 
                 if e.code() == grpc.StatusCode.ALREADY_EXISTS:
+                    logging.error("Duplicate error, no retry, exited")
                     raise HTTPException(status_code=409, detail=e.details())
 
                 if attempt >= MAX_RETRIES:
-                    raise e # Re-raise final error to be caught by the outer block
+                    raise e
  
                 await asyncio.sleep(delay)
                 delay *= 2
