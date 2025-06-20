@@ -55,8 +55,10 @@ class ItemServiceServicer(myitems_pb2_grpc.ItemServiceServicer):
             if items_collection.find_one({"$or": [{"id": request.id}, {"name": request.name}]}):
                 logging.info(f"Item with id {request.id} or name '{request.name}' already exists.")
                 context.set_details(f"Item with id {request.id} or name '{request.name}' already exists.")
-                context.set_code(grpc.StatusCode.ALREADY_EXISTS)
-                return myitems_pb2.AddItemResponse(result=False)
+                
+                # context.set_code(grpc.StatusCode.ALREADY_EXISTS)
+                # still return OK, only with result = False
+                return myitems_pb2.AddItemResponse(result=False, added_item=request)
                 
             items_collection.insert_one({"id": request.id, "name": request.name})
             logging.info(f"Added item id={request.id}, name='{request.name}'.")
