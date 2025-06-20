@@ -55,7 +55,7 @@ Simply ```docker compose up -d```
 
 Some sample curl commands to use the system
 <br>
-```curl -X POST -H "Content-Type: application/json" -d '{"id": 200, "name": "Laptop Stand"}'```
+```curl -X POST -H "Content-Type: application/json" -d '{"id": 301, "name": "Test Item Reliability"}' "http://localhost:5000/items" ; echo'```
 <br>
 ```curl -X GET "http://localhost:5000/items/?item_id=201" ; echo```
 <br>
