@@ -28,7 +28,7 @@
   + 2 retries after 1 sec & 2 sec to avoid IO display issue with minimal time
   + Reset timeout is 6 sec for testing
 
-- Supports: Request Queuing
+- Supports: Request Queuing (OBSOLETE)
   + When gRPC-service or MongoDB down, requests are put in a queue and will be processed when services are healthy again. This is done with a process checking the availability of required services by sending dummy request periodically in the background. 
 <br>
 <br>
