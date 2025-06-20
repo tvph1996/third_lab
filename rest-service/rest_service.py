@@ -54,13 +54,19 @@ async def add_item(request: Request):
         try:
             
             if breaker.current_state == 'CLOSED':
+                
                 response = breaker.call(gRPC_methods.AddItem, grpc_request, timeout=1.0)
+            
             else:
+                
+                # Only create new channel when CircuitBreaker is HALF_OPEN
                 gRPC_new_channel = grpc.insecure_channel(GRPC_ADDRESS)
                 gRPC_methods = myitems_pb2_grpc.ItemServiceStub(gRPC_new_channel)
                 response = breaker.call(gRPC_methods.AddItem, grpc_request, timeout=1.0)
             
+            
             if response.result:
+                
                 content = {"message": "Item added successfully.", "item": {"id": response.added_item.id, "name": response.added_item.name}}
                 return Response(content=json.dumps(content) + "\n", status_code=201, media_type="application/json")
 
